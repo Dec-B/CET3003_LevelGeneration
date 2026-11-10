@@ -1,0 +1,423 @@
+using System.Collections.Generic;
+using UnityEngine;
+
+/// <summary>
+/// A vertex/node on a grid.
+/// This includes a record of the 2D index and a world position.
+/// </summary>
+[System.Serializable]
+public class GridVertex
+{
+    public Vector3 position;
+    public Vector2Int index;
+
+    /// <summary>
+    /// The GridVertex constructor,
+    /// forcing a world position and grid position to be set
+    /// to create one.
+    /// </summary>
+    /// <param name="pos">World position of the grid vertex.</param>
+    /// <param name="idx">2D Grid index of the grid vertex.</param>
+    public GridVertex(Vector3 pos, Vector2Int idx)
+    {
+        position = pos;
+        index = idx;
+    }
+}
+
+/// <summary>
+/// A connection record between 2 grid vertices.
+/// Either as
+/// V1 <----------> V2
+/// or
+/// V2 <----------> V1
+/// </summary>
+[System.Serializable]
+public class GridEdge
+{
+    [SerializeReference]
+    public GridVertex v1;
+    [SerializeReference]
+    public GridVertex v2;
+
+    /// <summary>
+    /// The GridEdge constructor, forcing 2 Vertices to be input to create an edge.
+    /// A connection between vertex 1 and 2.
+    /// </summary>
+    /// <param name="vert1">Vertex 1.</param>
+    /// <param name="vert2">Vertex 2.</param>
+    public GridEdge(GridVertex vert1, GridVertex vert2)
+    {
+        v1 = vert1;
+        v2 = vert2;
+    }
+}
+
+/// <summary>
+/// A class that holds vertices and edges between vertices aka a graph.
+/// It does this with 2 lists:
+/// A list of vertices within the graph
+/// A list of edges that record connections between vertices
+/// </summary>
+[System.Serializable]
+public class GridGraph
+{
+    /// <summary>
+    /// A list of all the vertices in the graph.
+    /// </summary>
+    [SerializeReference]
+    public List<GridVertex> vertices;
+
+    /// <summary>
+    /// A list of all the edges in the graph.
+    /// </summary>
+    [SerializeReference]
+    public List<GridEdge> edges;
+
+    public Vector2Int gridSize; //Used for GetVertex() as the List is 1D but the index is 2D
+
+    /// <summary>
+    /// The GridGraph constructor, forcing a grid size to be used to create one.
+    /// Sets up the graph with fresh vertex and edge lists.
+    /// </summary>
+    /// <param name="gSize">The size of the graph.</param>
+    public GridGraph(Vector2Int gSize)
+    {
+        vertices = new List<GridVertex>();
+        edges = new List<GridEdge>();
+        gridSize = gSize;
+    }
+
+    /// <summary>
+    /// Given an index, goes through all the edges in the graph
+    /// Finding any connected neighbour vertices based on the edges.
+    /// Returns any neighbours of the input index.
+    /// As the graph directions are up, down, left, right,
+    /// we'd expect 4 neighbours maximum
+    /// and 0 neighbours minimum (if no edges connecting to the vertex).
+    /// </summary>
+    /// <param name="index">Vertex index to find neighbours for.</param>
+    /// <returns>A list of 0+ neighbours to the input index, based on the graph and it's edges.</returns>
+    public List<GridVertex> GetNeighbours(Vector2Int index)
+    {
+        List<GridVertex> neighbours = new List<GridVertex>();
+
+        foreach (GridEdge edge in edges)
+        {
+            if (edge.v1.index == index)
+            {
+                neighbours.Add(edge.v2);
+            }
+            else if (edge.v2.index == index)
+            {
+                neighbours.Add(edge.v1);
+            }
+        }
+
+        return neighbours;
+    }
+
+    /// <summary>
+    /// Adds a vertex to the grid's vertex list.
+    /// </summary>
+    /// <param name="n">Vertex to add.</param>
+    public void AddVertex(GridVertex n)
+    {
+        vertices.Add(n);
+    }
+
+    /// <summary>
+    /// Checks if an edge already exists between the 2 vertices.
+    /// Needs to check both sides of the edge to determine this.
+    /// </summary>
+    /// <param name="v1">Vertex v1.</param>
+    /// <param name="v2">Vertex v2.</param>
+    /// <returns>
+    /// Returns true if an existing edge exists between the two.
+    /// Returns false if no edge exists.
+    /// </returns>
+    public bool HasExistingEdge(GridVertex v1, GridVertex v2)
+    {
+        foreach (GridEdge edge in edges)
+        {
+            if ((edge.v1 == v1 && edge.v2 == v2) || (edge.v1 == v2 && edge.v2 == v1))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Checks for an edge with the input parameter vertices input.
+    /// If found, removes it from the edge list.
+    /// </summary>
+    /// <param name="a">Vertex a.</param>
+    /// <param name="b">Vertex b.</param>
+    public void RemoveEdge(GridVertex a, GridVertex b)
+    {
+        //Note: This counts from the end backwards as we are deleting edges
+        //as we access (and continue to access) the list.
+        //If we counted from 0 up and deleted things, we affect the size
+        //of the list as we iterate, which can cause issues.
+        for (int i = edges.Count - 1; i >= 0; i--)
+        {
+            GridEdge edge = edges[i];
+            
+            if ((edge.v1 == a && edge.v2 == b) || (edge.v1 == b && edge.v2 == a))
+            {
+                edges.RemoveAt(i);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Adds an edge of the 2 vertices to the edge list.
+    /// Only adds an edge if it does not already exist.
+    /// </summary>
+    /// <param name="a">Vertex a.</param>
+    /// <param name="b">Vertex b.</param>
+    public void AddEdge(GridVertex a, GridVertex b)
+    {
+        if (!HasExistingEdge(a, b))
+        {
+            edges.Add(new GridEdge(a, b));
+        }
+    }
+
+    /// <summary>
+    /// Converts a 2D index (x, z) to a 1D index to get the current Vertex.
+    /// Does not currently error check if out of bounds.
+    /// </summary>
+    /// <param name="x">X axis.</param>
+    /// <param name="z">Z axis.</param>
+    /// <returns></returns>
+    public GridVertex GetVertex(int x, int z)
+    {
+        return vertices[z * gridSize.x + x];
+    }
+}
+
+/// <summary>
+/// The component that:
+/// Allows some user input via the Component's Inspector.
+///
+/// Holds a grid graph.
+/// Generates the grid graph with a grid size the user inputs.
+/// Runs Prim's Algorithm (with your approach).
+/// Generates 3D walls based on the remaining grid after Prim's.
+///
+/// Without Prim's the graph will keep all edges and generate walls around each vertex.
+///
+/// Note: Will require all TODO's in the codebase complete to function.
+/// </summary>
+public class WorkshopMazeGenerator : MonoBehaviour
+{
+    [SerializeField] //Done so you can see graph values in the Inspector if you wish.
+    private GridGraph graph;
+    
+    // Added seed variable to allow user selection in Inspector as required by Task 1 instructions
+    public int seed; 
+
+    public Vector2Int gridSize;
+
+    //How big each cell in the grid should be. Used for visuals if needed.
+    //Note: Keep this to 1.0f in the inspector until you want to tweak cell sizes.
+    public float cellSize;
+
+    //Use a cube prefab with a scale of (0.1, 1, 1) and rotation (0, 0, 0).
+    public GameObject wallPrefab;
+
+    /// <summary>
+    /// Setups up the graph, runs the maze algorithm, and then generates 3D walls.
+    /// </summary>
+    void Start()
+    {
+        GenerateGraph();
+        PrimsAlgorithm();
+        GenerateWalls();
+    }
+
+    /// <summary>
+    /// Generates the graph based on a grid size.
+    ///
+    /// This creates a grid based graph where vertices are in the centre point of each grid cell
+    /// And a 4 direction linkage of neighbour vertices in the up, down, left, and right directions.
+    ///
+    /// This does a 2 step process:
+    /// Create the vertices/nodes of the graph in the right spot (centre of each grid cell)
+    /// Create the edges between all the vertices/nodes (2, 3, or 4 direction neighbours)
+    /// </summary>
+    private void GenerateGraph()
+    {
+        graph = new GridGraph(gridSize);
+
+        //Create vertices
+        for (int z = 0; z < gridSize.y; z++)
+        {
+            for (int x = 0; x < gridSize.x; x++)
+            {
+                GridVertex v = new GridVertex(new Vector3(x * cellSize, 0, z * cellSize), new Vector2Int(x, z));
+                graph.AddVertex(v);
+            }
+        }
+
+        //Create edges between vertices
+        foreach (GridVertex v in graph.vertices)
+        {
+            int x = v.index.x;
+            int z = v.index.y;
+
+            if (x + 1 < gridSize.x) graph.AddEdge(v, graph.GetVertex(x + 1, z));
+            if (x - 1 >= 0) graph.AddEdge(v, graph.GetVertex(x - 1, z));
+            if (z + 1 < gridSize.y) graph.AddEdge(v, graph.GetVertex(x, z + 1));
+            if (z - 1 >= 0) graph.AddEdge(v, graph.GetVertex(x, z - 1));
+        }
+    }
+
+    /// <summary>
+    /// The maze generation algorithm. Up to you.
+    /// </summary>
+    private void PrimsAlgorithm()
+    {
+        // Initializing Random state with seed as required for controlled generation
+        Random.InitState(seed); 
+
+        List<GridVertex> visited = new List<GridVertex>();
+        List<GridVertex> frontier = new List<GridVertex>();
+
+        GridVertex startNode = graph.vertices[Random.Range(0, graph.vertices.Count)];
+        visited.Add(startNode);
+
+        foreach (GridVertex neighbour in graph.GetNeighbours(startNode.index))
+        {
+            if (!visited.Contains(neighbour) && !frontier.Contains(neighbour))
+            {
+                frontier.Add(neighbour);
+            }
+        }
+
+        while (visited.Count < graph.vertices.Count && frontier.Count > 0)
+        {
+            int randIndex = Random.Range(0, frontier.Count);
+            GridVertex currentUnvisited = frontier[randIndex];
+
+            visited.Add(currentUnvisited);
+            frontier.RemoveAt(randIndex);
+
+            foreach (GridVertex neighbour in graph.GetNeighbours(currentUnvisited.index))
+            {
+                if (!visited.Contains(neighbour) && !frontier.Contains(neighbour))
+                {
+                    frontier.Add(neighbour);
+                }
+            }
+
+            List<GridVertex> visitedNeighbours = new List<GridVertex>();
+            foreach (GridVertex neighbour in graph.GetNeighbours(currentUnvisited.index))
+            {
+                if (visited.Contains(neighbour))
+                {
+                    visitedNeighbours.Add(neighbour);
+                }
+            }
+
+            if (visitedNeighbours.Count > 0)
+            {
+                GridVertex connectedVisitedNode = visitedNeighbours[Random.Range(0, visitedNeighbours.Count)];
+                graph.RemoveEdge(currentUnvisited, connectedVisitedNode);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Generates the 3D walls of the maze, creating ones around the edges of the level
+    /// As well as walls between any edges currently still in a graph.
+    ///
+    /// Based on the direction of the connection,
+    /// will rotate a wall to be perpendicular with that direction.
+    /// </summary>
+    private void GenerateWalls()
+    {
+        //Corners and edges of the grid and the walls needed for each "type" of corner and edge
+        foreach (GridVertex v in graph.vertices)
+        {
+            Vector3 position = v.position;
+
+            if (v.index == new Vector2Int(0, 0))
+            {
+                Instantiate(wallPrefab, position - new Vector3(cellSize / 2f, 0, 0), Quaternion.Euler(0f, 0f, 0f));
+                Instantiate(wallPrefab, position - new Vector3(0, 0, cellSize / 2f), Quaternion.Euler(0f, 90f, 0f));
+            }
+            else if (v.index.x == graph.gridSize.x - 1 && v.index.y == 0)
+            {
+                Instantiate(wallPrefab, position + new Vector3(cellSize / 2f, 0, 0), Quaternion.Euler(0f, 0f, 0f));
+                Instantiate(wallPrefab, position - new Vector3(0, 0, cellSize / 2f), Quaternion.Euler(0f, 90f, 0f));
+            }
+            else if (v.index.x == 0 && v.index.y == graph.gridSize.y - 1)
+            {
+                Instantiate(wallPrefab, position - new Vector3(cellSize / 2f, 0, 0), Quaternion.Euler(0f, 0f, 0f));
+                Instantiate(wallPrefab, position + new Vector3(0, 0, cellSize / 2f), Quaternion.Euler(0f, 90f, 0f));
+            }
+            else if (v.index.x == graph.gridSize.x - 1 && v.index.y == graph.gridSize.y - 1)
+            {
+                Instantiate(wallPrefab, position + new Vector3(cellSize / 2f, 0, 0), Quaternion.Euler(0f, 0f, 0f));
+                Instantiate(wallPrefab, position + new Vector3(0, 0, cellSize / 2f), Quaternion.Euler(0f, 90f, 0f));
+            }
+            else if (v.index.y == 0)
+            {
+                Instantiate(wallPrefab, position - new Vector3(0, 0, cellSize / 2f), Quaternion.Euler(0f, 90f, 0f));
+            }
+            else if (v.index.y == graph.gridSize.y - 1)
+            {
+                Instantiate(wallPrefab, position + new Vector3(0, 0, cellSize / 2f), Quaternion.Euler(0f, 90f, 0f));
+            }
+            else if (v.index.x == 0)
+            {
+                Instantiate(wallPrefab, position - new Vector3(cellSize / 2f, 0, 0), Quaternion.Euler(0f, 0f, 0f));
+            }
+            else if (v.index.x == graph.gridSize.x - 1)
+            {
+                Instantiate(wallPrefab, position + new Vector3(cellSize / 2f, 0, 0), Quaternion.Euler(0f, 0f, 0f));
+            }
+        }
+
+        //Edges within the grid get a wall
+        //Rotate the wall based on the direction of the edge
+        foreach (GridEdge edge in graph.edges)
+        {
+            Vector3 position = (edge.v1.position + edge.v2.position) / 2.0f;
+
+            if (edge.v1.index.x == edge.v2.index.x)
+            {
+                GameObject wall = Instantiate(wallPrefab, position, Quaternion.Euler(0f, 90f, 0f));
+            }
+            else
+            {
+                GameObject wall = Instantiate(wallPrefab, position, Quaternion.identity);
+            }
+        }
+    }
+
+    //Used for debugging vertices and edges in the Scene View
+    //when the scene is ran with this component present
+    public void OnDrawGizmos()
+    {
+        if (graph == null || graph.vertices == null) return;
+        
+        foreach (GridVertex v in graph.vertices)
+        {
+            Gizmos.color = Color.red;
+            Gizmos.DrawCube(v.position, new Vector3(cellSize / 4f, cellSize / 4f, cellSize / 4f));
+        }
+
+        Gizmos.color = Color.magenta;
+        
+        if (graph.edges == null) return;
+        
+        foreach (GridEdge edge in graph.edges)
+        {
+            Gizmos.DrawLine(edge.v1.position, edge.v2.position);
+        }
+    }
+}
